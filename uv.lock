@@ -1359,6 +1359,7 @@ version = "0.1.0"
 source = { editable = "." }
 dependencies = [
     { name = "fastapi" },
+    { name = "python-dotenv" },
     { name = "strands-agents" },
     { name = "strands-agents-tools" },
     { name = "uvicorn" },
@@ -1377,6 +1378,7 @@ requires-dist = [
     { name = "fastapi", specifier = ">=0.104.0" },
     { name = "flake8", marker = "extra == 'dev'" },
     { name = "pytest", marker = "extra == 'dev'" },
+    { name = "python-dotenv", specifier = ">=1.0.0" },
     { name = "strands-agents", specifier = ">=1.0.0" },
     { name = "strands-agents-tools", specifier = ">=0.2.0" },
     { name = "uvicorn", specifier = ">=0.24.0" },

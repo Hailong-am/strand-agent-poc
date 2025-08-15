@@ -1,10 +1,14 @@
 from mcp import stdio_client, StdioServerParameters
-from strands import Agent
+from strands import Agent, tool
 from strands.tools.mcp import MCPClient
 import logging
-from strands.handlers.callback_handler import PrintingCallbackHandler
+import os
+from dotenv import load_dotenv
 
 from . import model
+
+# Load environment variables
+load_dotenv()
 
 # Set up logging
 logging.basicConfig(level=logging.INFO)
@@ -23,10 +27,10 @@ stdio_mcp_client = MCPClient(lambda: stdio_client(
         command="uvx",
         args=["opensearch-mcp-server-py"],
         env={
-            "OPENSEARCH_URL": "http://k8s-deeprese-opensear-4caa63d63b-318495646.us-east-1.elb.amazonaws.com:80",
-            "OPENSEARCH_USERNAME": "admin",
-            "OPENSEARCH_PASSWORD": "myStrongPassword123!",
-            "OPENSEARCH_SSL_VERIFY": "false"
+            "OPENSEARCH_URL": os.getenv("OPENSEARCH_URL"),
+            "OPENSEARCH_USERNAME": os.getenv("OPENSEARCH_USERNAME"),
+            "OPENSEARCH_PASSWORD": os.getenv("OPENSEARCH_PASSWORD"),
+            "OPENSEARCH_SSL_VERIFY": os.getenv("OPENSEARCH_SSL_VERIFY")
         }
     )
 ))

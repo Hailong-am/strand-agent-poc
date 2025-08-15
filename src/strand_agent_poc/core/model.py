@@ -5,7 +5,7 @@ from strands.models import BedrockModel
 
 session = boto3.Session(
     region_name='us-east-1',
-    profile_name='ihailong-Admin'  # Optional: Use a specific profile
+    profile_name='shanghaiopensearch-jiaruj-Admin'  
 )
 
 # Claude 3.7 Sonnet model for executor

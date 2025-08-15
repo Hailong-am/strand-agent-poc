@@ -1,9 +1,15 @@
 import json
-from typing import Dict, Any
+from typing import Dict, Any, Optional
 from strands import Agent
-from strands_tools import current_time
+# from strands_tools import current_time
+from strands_tools.agent_core_memory import AgentCoreMemoryToolProvider
 from . import model
 from .executor import executor_agent
+
+MEMORY_ID = "memory_anx9d-xl4QUwBOS0"
+ACTOR_ID = "jiaruj"
+NAMESPACE = "default"
+REGION = "us-west-2"
 
 
 class PlanExecuteReflectAgent:
@@ -20,7 +26,7 @@ class PlanExecuteReflectAgent:
         self.planner = Agent(
             model=model.bedrockModel,
             system_prompt=self.planner_prompt,
-            tools=[current_time]
+            # tools=[current_time]
         )
 
     def _get_planner_prompt(self) -> str:
@@ -70,7 +76,7 @@ Example 2 - When you have the final result:
         return """Update your plan based on the latest step results. If the task is complete, return the final answer. Otherwise, include only the remaining steps. Do not repeat previously completed steps."""
 
     def _parse_llm_output(self, response: str) -> Dict[str, Any]:
-        """Parse LLM response and extract JSON"""
+        # Parse LLM response and extract JSON
         try:
             # Remove markdown code blocks if present
             if "```json" in response:
@@ -86,14 +92,57 @@ Example 2 - When you have the final result:
         except json.JSONDecodeError as e:
             return {"steps": [], "result": f"Error parsing response: {str(e)}"}
 
-    def execute(self, objective: str) -> str:
-        """Main execution loop implementing Plan-Execute-Reflect pattern"""
-        self.completed_steps = []
+    def _get_agent_core_memory(self, session_id: str):
+        # Create a new AgentCoreMemoryToolProvider for each session
+        provider = AgentCoreMemoryToolProvider(
+            memory_id=MEMORY_ID,
+            actor_id=ACTOR_ID,
+            session_id=session_id,
+            namespace=NAMESPACE,
+            region=REGION
+        )
+        return provider.agent_core_memory
 
-        if len(self.completed_steps) < self.max_steps:
-            # Generate plan
+    def _load_conversation_history(self, conversationId: str) -> list:
+        # Use agent_core_memory with current session_id (conversationId)
+        agent_core_memory = self._get_agent_core_memory(conversationId)
+        result = agent_core_memory(
+            action="list",
+        )
+        print("&&&&&")
+        print(result)
+        # result["content"] 是一个列表，每个元素是 {"text": ...}
+        if result.get("status") == "success" and result.get("content"):
+            steps = []
+            for item in result["content"]:
+                try:
+                    # 这里假设存储的内容是json字符串
+                    steps.append(json.loads(item["text"]))
+                except Exception:
+                    continue
+            return steps
+        return []
+
+    def _save_interaction(self, conversationId: str, interaction: dict):
+        # Use agent_core_memory with current session_id (conversationId)
+        agent_core_memory = self._get_agent_core_memory(conversationId)
+        agent_core_memory(
+            action="record",
+            content=json.dumps(interaction, ensure_ascii=False)
+        )
+
+    def execute(self, objective: str, conversationId: Optional[str] = None) -> str:
+        # Main execution loop for Plan-Execute-Reflect agent
+        if conversationId is None:
+            conversationId = "default_conversation"
+
+        self.completed_steps = self._load_conversation_history(conversationId)
+        interactionId = 0  # Initialize interactionId
+
+        while len(self.completed_steps) < self.max_steps:
             if len(self.completed_steps) > 0:
                 # Use reflection prompt with completed steps
+                interactionId += 1
                 prompt = f"""Objective: {objective}
 
 You have currently executed the following steps:
@@ -103,10 +152,12 @@ You have currently executed the following steps:
 
 Remember: Respond only in JSON format following the required schema."""
             else:
-                # Initial planning
                 prompt = f"""Objective: {objective}
 
 Remember: Respond only in JSON format following the required schema."""
+
+            # Add agent_core_memory tool for planner agent dynamically
+            self.planner.tools = [self._get_agent_core_memory(conversationId)]
 
             # Get plan from planner
             planner_response = str(self.planner(prompt))
@@ -114,22 +165,41 @@ Remember: Respond only in JSON format following the required schema."""
 
             # Check if we have a final result
             if parsed_response.get("result"):
+                # Save final result
+                self._save_interaction(conversationId, {
+                    "conversationId": conversationId,
+                    "input": objective,
+                    "result": parsed_response["result"]
+                })
                 return parsed_response["result"]
 
-            # Execute first step if available
+            # Execute next step if available
             steps = parsed_response.get("steps", [])
             if not steps:
                 return "No more steps to execute and no final result provided."
 
-            # Execute the first step
-            first_step = steps[0]
-            step_result = executor_agent(first_step)
+            # Find the next unfinished step
+            completed_step_texts = {s.get("input") for s in self.completed_steps}
+            next_step = None
+            for s in steps:
+                if s not in completed_step_texts:
+                    next_step = s
+                    break
 
-            # Add to completed steps
-            self.completed_steps.append({
-                "step": first_step,
+            if next_step is None:
+                # All steps have been executed
+                return f"All planned steps executed. Completed steps: {json.dumps(self.completed_steps, indent=2)}"
+
+            # Execute the step
+            step_result = executor_agent(next_step)
+            interaction = {
+                "interactionId": interactionId,
+                "input": next_step,
                 "result": step_result
-            })
+            }
+            self.completed_steps.append(interaction)
+            self._save_interaction(conversationId, interaction)
+
 
         # Max steps reached
         return f"Maximum steps ({self.max_steps}) reached. Completed steps: {json.dumps(self.completed_steps, indent=2)}"
@@ -138,6 +208,7 @@ Remember: Respond only in JSON format following the required schema."""
 # Create the main agent instance
 plan_execute_reflect_agent = PlanExecuteReflectAgent()
 
-def run_agent(objective: str) -> str:
-    """Main entry point for the Plan-Execute-Reflect agent"""
-    return plan_execute_reflect_agent.execute(objective)
+def run_agent(objective: str, conversationId: Optional[str] = None) -> str:
+    # Main entry point for the Plan-Execute-Reflect agent
+    return plan_execute_reflect_agent.execute(objective, conversationId)
+

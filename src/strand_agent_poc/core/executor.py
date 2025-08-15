@@ -63,7 +63,6 @@ def executor_agent(task: str) -> str:
             executor_agent = Agent(
                 model=model.bedrockModel,
                 system_prompt=get_executor_prompt(),
-                callback_handler=PrintingCallbackHandler(),
                 tools=tools, # tools to query opensearch data and indexes
             )
 

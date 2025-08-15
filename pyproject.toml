@@ -1,0 +1,29 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "strand-agent-poc"
+version = "0.1.0"
+description = "Strand Agent Proof of Concept"
+requires-python = ">=3.10"
+dependencies = [
+    "strands-agents>=1.0.0",
+    "strands-agents-tools>=0.2.0",
+    "fastapi>=0.104.0",
+    "uvicorn>=0.24.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest",
+    "black",
+    "flake8",
+]
+
+[project.scripts]
+strand-agent = "strand_agent_poc.main:main"
+strand-agent-api = "strand_agent_poc.api:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]

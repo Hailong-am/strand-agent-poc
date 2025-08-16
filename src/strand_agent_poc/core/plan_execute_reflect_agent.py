@@ -1,8 +1,13 @@
 import json
 from typing import Dict, Any, Optional
 from strands import Agent
-# from strands_tools import current_time
+from strands.session.file_session_manager import FileSessionManager
+# from strands.session.repository_session_manager import RepositorySessionManager
+from strands_tools import current_time
 from strands_tools.agent_core_memory import AgentCoreMemoryToolProvider
+from strands.agent.conversation_manager import SummarizingConversationManager
+
+# from .session_manager import AgentCoreSessionRepository
 from . import model
 from .executor import executor_agent
 
@@ -13,7 +18,7 @@ REGION = "us-west-2"
 
 
 class PlanExecuteReflectAgent:
-    def __init__(self, max_steps: int = 20, executor_max_iterations: int = 20):
+    def __init__(self, session_id: str = 'default_conversation', max_steps: int = 20, executor_max_iterations: int = 20):
         self.max_steps = max_steps
         self.executor_max_iterations = executor_max_iterations
         self.completed_steps = []
@@ -22,11 +27,26 @@ class PlanExecuteReflectAgent:
         self.planner_prompt = self._get_planner_prompt()
         self.reflect_prompt = self._get_reflect_prompt()
 
+        # Create a new AgentCoreMemoryToolProvider for each session
+        memory_tool = self._get_agent_core_memory(session_id)
+
+        # Initialize session manager with conversationId
+        session_manager = FileSessionManager(
+            session_id=session_id
+        )
+
         # Create planner agent
         self.planner = Agent(
-            model=model.bedrockModel,
+            model=model.bedrock37Model,
             system_prompt=self.planner_prompt,
-            # tools=[current_time]
+            tools=[current_time, memory_tool],
+            conversation_manager=SummarizingConversationManager(
+                preserve_recent_messages = 10,
+            ),
+            session_manager=session_manager,
+            agent_id="planner_agent",
+            name="Planner Agent",
+            description="Planner agent for creating step-by-step plans"
         )
 
     def _get_planner_prompt(self) -> str:
@@ -36,7 +56,7 @@ class PlanExecuteReflectAgent:
 - Log analysis and filtering tools
 
 """
-        
+
         return f"""{tools_prompt}You are a thoughtful and analytical planner agent in a plan-execute-reflect framework. Your job is to design a clear, step-by-step plan for a given objective.
 
 Instructions:
@@ -105,8 +125,8 @@ Example 2 - When you have the final result:
 
     def _load_conversation_history(self, conversationId: str) -> list:
         # Use agent_core_memory with current session_id (conversationId)
-        agent_core_memory = self._get_agent_core_memory(conversationId)
-        result = agent_core_memory(
+        memory = self._get_agent_core_memory(conversationId)
+        result = memory(
             action="list",
         )
         print("&&&&&")
@@ -132,17 +152,15 @@ Example 2 - When you have the final result:
         )
 
     def execute(self, objective: str, conversationId: Optional[str] = None) -> str:
+        # self.completed_steps = self._load_conversation_history(conversationId)
+        # interactionId = 0  # Initialize interactionId
+
         # Main execution loop for Plan-Execute-Reflect agent
-        if conversationId is None:
-            conversationId = "default_conversation"
-
-        self.completed_steps = self._load_conversation_history(conversationId)
-        interactionId = 0  # Initialize interactionId
-
         while len(self.completed_steps) < self.max_steps:
-            if len(self.completed_steps) > 0:
+            # Generate plan
+            if self.completed_steps:
                 # Use reflection prompt with completed steps
-                interactionId += 1
+                # interactionId += 1
                 prompt = f"""Objective: {objective}
 
 You have currently executed the following steps:
@@ -157,7 +175,7 @@ Remember: Respond only in JSON format following the required schema."""
 Remember: Respond only in JSON format following the required schema."""
 
             # Add agent_core_memory tool for planner agent dynamically
-            self.planner.tools = [self._get_agent_core_memory(conversationId)]
+            # self.planner.tools = [self._get_agent_core_memory(conversationId)]
 
             # Get plan from planner
             planner_response = str(self.planner(prompt))
@@ -165,12 +183,12 @@ Remember: Respond only in JSON format following the required schema."""
 
             # Check if we have a final result
             if parsed_response.get("result"):
-                # Save final result
-                self._save_interaction(conversationId, {
-                    "conversationId": conversationId,
-                    "input": objective,
-                    "result": parsed_response["result"]
-                })
+                # # Save final result
+                # self._save_interaction(conversationId, {
+                #     "conversationId": conversationId,
+                #     "input": objective,
+                #     "result": parsed_response["result"]
+                # })
                 return parsed_response["result"]
 
             # Execute next step if available
@@ -193,12 +211,11 @@ Remember: Respond only in JSON format following the required schema."""
             # Execute the step
             step_result = executor_agent(next_step)
             interaction = {
-                "interactionId": interactionId,
                 "input": next_step,
                 "result": step_result
             }
             self.completed_steps.append(interaction)
-            self._save_interaction(conversationId, interaction)
+            # self._save_interaction(conversationId, interaction)
 
 
         # Max steps reached

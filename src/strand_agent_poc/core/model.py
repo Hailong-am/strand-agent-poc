@@ -9,7 +9,7 @@ session = boto3.Session(
 )
 
 # Claude 3.7 Sonnet model for executor
-bedrockModel = BedrockModel(
+bedrock37Model = BedrockModel(
     model_id="us.anthropic.claude-3-7-sonnet-20250219-v1:0",
     boto_session=session
 )

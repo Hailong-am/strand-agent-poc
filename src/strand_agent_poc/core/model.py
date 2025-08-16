@@ -1,11 +1,14 @@
 
+import os
 import boto3
 from strands.models import BedrockModel
+from dotenv import load_dotenv
 
+load_dotenv()
 
 session = boto3.Session(
-    region_name='us-east-1',
-    profile_name='shanghaiopensearch-jiaruj-Admin'  
+    region_name=os.getenv("REGION", "us-east-1"),
+    profile_name=os.getenv("AWS_PROFILE", "default"),
 )
 
 # Claude 3.7 Sonnet model for executor

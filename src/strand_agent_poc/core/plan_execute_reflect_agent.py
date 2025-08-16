@@ -1,4 +1,5 @@
 import json
+import os
 from typing import Dict, Any, Optional
 from strands import Agent
 from strands.session.file_session_manager import FileSessionManager
@@ -11,10 +12,13 @@ from strands.agent.conversation_manager import SummarizingConversationManager
 from . import model
 from .executor import executor_agent
 
-MEMORY_ID = "memory_anx9d-xl4QUwBOS0"
-ACTOR_ID = "jiaruj"
-NAMESPACE = "default"
-REGION = "us-west-2"
+from dotenv import load_dotenv
+load_dotenv()
+
+MEMORY_ID = os.getenv("MEMORY_ID")
+ACTOR_ID = os.getenv("ACTOR_ID")
+NAMESPACE = os.getenv("NAMESPACE", "default")
+REGION = os.getenv("REGION", "us-east-1")
 
 
 class PlanExecuteReflectAgent:
@@ -32,6 +36,7 @@ class PlanExecuteReflectAgent:
 
         # Initialize session manager with conversationId
         session_manager = FileSessionManager(
+            storage_dir=os.getenv("SESSION_STORAGE_DIR", "./sessions"),
             session_id=session_id
         )
 
@@ -50,11 +55,8 @@ class PlanExecuteReflectAgent:
         )
 
     def _get_planner_prompt(self) -> str:
-        tools_prompt = """Available tools for execution:
-- OpenSearch MCP Server tools: Query and search OpenSearch indexes and documents
-- Document retrieval and analysis capabilities
-- Log analysis and filtering tools
-
+        tools_prompt = """Available tools for executors agent:
+        ['ListIndexTool', 'IndexMappingTool', 'SearchIndexTool', 'GetShardsTool', 'ClusterHealthTool', 'CountTool', 'MsearchTool', 'ExplainTool']
 """
 
         return f"""{tools_prompt}You are a thoughtful and analytical planner agent in a plan-execute-reflect framework. Your job is to design a clear, step-by-step plan for a given objective.
@@ -115,6 +117,7 @@ Example 2 - When you have the final result:
     def _get_agent_core_memory(self, session_id: str):
         # Create a new AgentCoreMemoryToolProvider for each session
         provider = AgentCoreMemoryToolProvider(
+            boto_session=model.session,
             memory_id=MEMORY_ID,
             actor_id=ACTOR_ID,
             session_id=session_id,
@@ -181,8 +184,11 @@ Remember: Respond only in JSON format following the required schema."""
             planner_response = str(self.planner(prompt))
             parsed_response = self._parse_llm_output(planner_response)
 
+
+            steps = parsed_response.get("steps", [])
+
             # Check if we have a final result
-            if parsed_response.get("result"):
+            if parsed_response.get("result") and len(steps) == 0:
                 # # Save final result
                 # self._save_interaction(conversationId, {
                 #     "conversationId": conversationId,
@@ -192,7 +198,7 @@ Remember: Respond only in JSON format following the required schema."""
                 return parsed_response["result"]
 
             # Execute next step if available
-            steps = parsed_response.get("steps", [])
+
             if not steps:
                 return "No more steps to execute and no final result provided."
 

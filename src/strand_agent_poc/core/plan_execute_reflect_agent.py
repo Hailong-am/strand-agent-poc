@@ -233,11 +233,24 @@ class PlanExecuteReflectAgent:
         return f"Maximum steps ({self.max_steps}) reached. Completed steps: {json.dumps(self.completed_steps, indent=2)}"
 
 
-def run_agent(objective: str, conversationId: Optional[str]) -> str:
+def run_agent(
+    objective: str,
+    memory_id: Optional[str] = None,
+    max_steps: int = 20,
+    executor_max_iterations: int = 20,
+    system_prompt: Optional[str] = None,
+    executor_system_prompt: Optional[str] = None,
+    planner_prompt: Optional[str] = None,
+    reflect_prompt: Optional[str] = None,
+) -> str:
     # Create the main agent instance
-    if not conversationId:
-        conversationId = os.urandom(16).hex()
-    plan_execute_reflect_agent = PlanExecuteReflectAgent(session_id= conversationId)
+    if not memory_id:
+        memory_id = os.urandom(16).hex()
+    plan_execute_reflect_agent = PlanExecuteReflectAgent(
+        session_id=memory_id,
+        max_steps=max_steps,
+        executor_max_iterations=executor_max_iterations
+    )
     # Main entry point for the Plan-Execute-Reflect agent
-    return plan_execute_reflect_agent.execute(objective, conversationId)
+    return plan_execute_reflect_agent.execute(objective, memory_id)
 

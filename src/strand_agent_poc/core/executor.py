@@ -1,6 +1,6 @@
 import json
 from mcp import stdio_client, StdioServerParameters
-from strands import Agent
+from strands import Agent, tool
 from strands.tools.mcp import MCPClient
 import os
 from dotenv import load_dotenv
@@ -56,6 +56,20 @@ Instructions:
 - Your response must be self-contained and ready for the planner to use without modification. Never end with a question.
 - Break complex searches into simpler queries when appropriate."""
 
+# @tool
+# def index_insight_tool():
+#     pass
+
+
+def get_tool_prompt() -> str:
+    with stdio_mcp_client:
+        tools = stdio_mcp_client.list_tools_sync()
+        tool_descriptions = "\n".join([f"Tool {i+1} - {tool['tool_name']}: {tool['tool_spec']}" for i, tool in enumerate(tools)])
+        return f"""Available Tools:
+In this environment, you have access to the tools listed below. Use these tools to execute the given instruction, and do not reference or use any tools not listed here.
+{tool_descriptions}
+No other tools are available. Do not invent tools. Only use tools to execute the instruction.
+        """
 
 def executor_agent(task: str) -> str:
     try:

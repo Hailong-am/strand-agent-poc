@@ -8,9 +8,11 @@ from strands_tools import current_time
 from strands_tools.agent_core_memory import AgentCoreMemoryToolProvider
 from strands.agent.conversation_manager import SummarizingConversationManager
 
+from src.strand_agent_poc.core.prompt_management.prompts import DEFAULT_PLANNER_PROMPT, DEFAULT_REFLECT_PROMPT, FINAL_RESULT_RESPONSE_INSTRUCTIONS, PLAN_EXECUTE_REFLECT_RESPONSE_FORMAT, PLANNER_RESPONSIBILITY
+
 # from .session_manager import AgentCoreSessionRepository
 from . import model
-from .executor import executor_agent
+from .executor import executor_agent, get_tool_prompt
 
 from dotenv import load_dotenv
 load_dotenv()
@@ -22,14 +24,16 @@ REGION = os.getenv("REGION", "us-east-1")
 
 
 class PlanExecuteReflectAgent:
-    def __init__(self, session_id: str = 'default_conversation', max_steps: int = 20, executor_max_iterations: int = 20):
+    def __init__(self, session_id = 'default_conversation', max_steps: int = 20, executor_max_iterations: int = 20):
         self.max_steps = max_steps
         self.executor_max_iterations = executor_max_iterations
         self.completed_steps = []
+        self.plan_steps = []
+
+        self.tool_prompt = get_tool_prompt()
 
         # Prompt templates
-        self.planner_prompt = self._get_planner_prompt()
-        self.reflect_prompt = self._get_reflect_prompt()
+        self.planner_system_prompt = self._get_planner_system_prompt()
 
         # Create a new AgentCoreMemoryToolProvider for each session
         memory_tool = self._get_agent_core_memory(session_id)
@@ -43,7 +47,7 @@ class PlanExecuteReflectAgent:
         # Create planner agent
         self.planner = Agent(
             model=model.bedrock37Model,
-            system_prompt=self.planner_prompt,
+            system_prompt=self.planner_system_prompt,
             tools=[current_time, memory_tool],
             conversation_manager=SummarizingConversationManager(
                 preserve_recent_messages = 10,
@@ -54,48 +58,46 @@ class PlanExecuteReflectAgent:
             description="Planner agent for creating step-by-step plans"
         )
 
-    def _get_planner_prompt(self) -> str:
-        tools_prompt = """Available tools for executors agent:
-        ['ListIndexTool', 'IndexMappingTool', 'SearchIndexTool', 'GetShardsTool', 'ClusterHealthTool', 'CountTool', 'MsearchTool', 'ExplainTool']
-"""
+    def _get_planner_system_prompt(self) -> str:
+        return PLANNER_RESPONSIBILITY + PLAN_EXECUTE_REFLECT_RESPONSE_FORMAT + FINAL_RESULT_RESPONSE_INSTRUCTIONS
 
-        return f"""{tools_prompt}You are a thoughtful and analytical planner agent in a plan-execute-reflect framework. Your job is to design a clear, step-by-step plan for a given objective.
+    def _get_planner_prompt_template(self, parameters: dict[str, str]) -> str:
+        return f"""${parameters['tools_prompt']}
+        ${parameters['planner_prompt']}
+        Objective: ${parameters['user_prompt']}
 
-Instructions:
-- Break the objective into an ordered list of atomic, self-contained Steps that, if executed, will lead to the final result or complete the objective.
-- Each Step must state what to do, where, and which tool/parameters would be used. You do not execute tools, only reference them for planning.
-- Use only the provided tools; do not invent or assume tools. If no suitable tool applies, use reasoning or observations instead.
-- Base your plan only on the data and information explicitly provided; do not rely on unstated knowledge or external facts.
-- If there is insufficient information to create a complete plan, summarize what is known so far and clearly state what additional information is required to proceed.
-- Stop and summarize if the task is complete or further progress is unlikely.
-- Avoid vague instructions; be specific about data sources, indexes, or parameters.
-- Never make assumptions or rely on implicit knowledge.
-- Respond only in JSON format.
+        Remember: Respond only in JSON format following the required schema."""
 
-Response Instructions:
-Only respond in JSON format. Always follow the given response instructions. Do not return any content that does not follow the response instructions. Do not add anything before or after the expected JSON.
-Always respond with a valid JSON object that strictly follows the below schema:
-{{
-    "steps": array[string],
-    "result": string
-}}
-Use "steps" to return an array of strings where each string is a step to complete the objective, leave it empty if you know the final result. Please wrap each step in quotes and escape any special characters within the string.
-Use "result" return the final response when you have enough information, leave it empty if you want to execute more steps. Please escape any special characters within the result.
+    @DeprecationWarning
+    def _get_planner_prompt_template_with_history(self, parameters: dict[str, str]) -> str:
+        return f"""${parameters['tools_prompt']}
 
-Example 1 - When you need to execute steps:
-{{
-    "steps": ["This is an example step", "this is another example step"],
-    "result": ""
-}}
+        ${parameters['planner_prompt']}
 
-Example 2 - When you have the final result:
-{{
-    "steps": [],
-    "result": "This is an example result\\n with escaped special characters"
-}}"""
+        Objective: ```${parameters['user_prompt']}```
 
-    def _get_reflect_prompt(self) -> str:
-        return """Update your plan based on the latest step results. If the task is complete, return the final answer. Otherwise, include only the remaining steps. Do not repeat previously completed steps."""
+        You have currently executed the following steps:
+        [${parameters['completed_steps']}]
+
+        Remember: Respond only in JSON format following the required schema."""
+
+    def _get_reflect_prompt_template(self, parameters: dict[str, str]) -> str:
+        return f"""${parameters['tools_prompt']}
+
+        ${parameters['planner_prompt']}
+
+        Objective: ```${parameters['user_prompt']}```
+
+        Original plan:
+        [${parameters['steps']}]
+
+        You have currently executed the following steps from the original plan:
+        [${parameters['completed_steps']}]
+
+        ${parameters['reflect_prompt']}
+
+        Remember: Respond only in JSON format following the required schema.
+    """
 
     def _parse_llm_output(self, response: str) -> Dict[str, Any]:
         # Parse LLM response and extract JSON
@@ -164,18 +166,21 @@ Example 2 - When you have the final result:
             if self.completed_steps:
                 # Use reflection prompt with completed steps
                 # interactionId += 1
-                prompt = f"""Objective: {objective}
-
-You have currently executed the following steps:
-{json.dumps(self.completed_steps, indent=2)}
-
-{self.reflect_prompt}
-
-Remember: Respond only in JSON format following the required schema."""
+                prompt = self._get_reflect_prompt_template({
+                    "tools_prompt": self.tool_prompt,
+                    "planner_prompt": DEFAULT_PLANNER_PROMPT,
+                    "user_prompt": objective,
+                    'steps': json.dumps(self.plan_steps, ensure_ascii=False),
+                    "completed_steps": json.dumps(self.completed_steps, ensure_ascii=False),
+                    'reflect_prompt': DEFAULT_REFLECT_PROMPT
+                })
             else:
-                prompt = f"""Objective: {objective}
-
-Remember: Respond only in JSON format following the required schema."""
+                # Use planner prompt without completed steps
+                prompt = self._get_planner_prompt_template({
+                    "tools_prompt": self.tool_prompt,
+                    "planner_prompt": DEFAULT_PLANNER_PROMPT,
+                    "user_prompt": objective,
+                })
 
             # Add agent_core_memory tool for planner agent dynamically
             # self.planner.tools = [self._get_agent_core_memory(conversationId)]
@@ -184,8 +189,8 @@ Remember: Respond only in JSON format following the required schema."""
             planner_response = str(self.planner(prompt))
             parsed_response = self._parse_llm_output(planner_response)
 
-
             steps = parsed_response.get("steps", [])
+            self.plan_steps = steps
 
             # Check if we have a final result
             if parsed_response.get("result") and len(steps) == 0:
@@ -228,10 +233,9 @@ Remember: Respond only in JSON format following the required schema."""
         return f"Maximum steps ({self.max_steps}) reached. Completed steps: {json.dumps(self.completed_steps, indent=2)}"
 
 
-# Create the main agent instance
-plan_execute_reflect_agent = PlanExecuteReflectAgent()
-
-def run_agent(objective: str, conversationId: Optional[str] = None) -> str:
+def run_agent(objective: str, conversationId: str) -> str:
+    # Create the main agent instance
+    plan_execute_reflect_agent = PlanExecuteReflectAgent(session_id= conversationId)
     # Main entry point for the Plan-Execute-Reflect agent
     return plan_execute_reflect_agent.execute(objective, conversationId)
 

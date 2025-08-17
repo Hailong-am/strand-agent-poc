@@ -64,7 +64,7 @@ Instructions:
 def get_tool_prompt() -> str:
     with stdio_mcp_client:
         tools = stdio_mcp_client.list_tools_sync()
-        tool_descriptions = "\n".join([f"Tool {i+1} - {tool['tool_name']}: {tool['tool_spec']}" for i, tool in enumerate(tools)])
+        tool_descriptions = "\n".join([f"Tool {i+1} - {tool.tool_name}: {tool.tool_spec}" for i, tool in enumerate(tools)])
         return f"""Available Tools:
 In this environment, you have access to the tools listed below. Use these tools to execute the given instruction, and do not reference or use any tools not listed here.
 {tool_descriptions}

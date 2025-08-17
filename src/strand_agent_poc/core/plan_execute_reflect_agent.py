@@ -8,7 +8,7 @@ from strands_tools import current_time
 from strands_tools.agent_core_memory import AgentCoreMemoryToolProvider
 from strands.agent.conversation_manager import SummarizingConversationManager
 
-from src.strand_agent_poc.core.prompt_management.prompts import DEFAULT_PLANNER_PROMPT, DEFAULT_REFLECT_PROMPT, FINAL_RESULT_RESPONSE_INSTRUCTIONS, PLAN_EXECUTE_REFLECT_RESPONSE_FORMAT, PLANNER_RESPONSIBILITY
+from .prompt_management.prompts import DEFAULT_PLANNER_PROMPT, DEFAULT_REFLECT_PROMPT, FINAL_RESULT_RESPONSE_INSTRUCTIONS, PLAN_EXECUTE_REFLECT_RESPONSE_FORMAT, PLANNER_RESPONSIBILITY
 
 # from .session_manager import AgentCoreSessionRepository
 from . import model
@@ -233,8 +233,10 @@ class PlanExecuteReflectAgent:
         return f"Maximum steps ({self.max_steps}) reached. Completed steps: {json.dumps(self.completed_steps, indent=2)}"
 
 
-def run_agent(objective: str, conversationId: str) -> str:
+def run_agent(objective: str, conversationId: Optional[str]) -> str:
     # Create the main agent instance
+    if not conversationId:
+        conversationId = os.urandom(16).hex()
     plan_execute_reflect_agent = PlanExecuteReflectAgent(session_id= conversationId)
     # Main entry point for the Plan-Execute-Reflect agent
     return plan_execute_reflect_agent.execute(objective, conversationId)

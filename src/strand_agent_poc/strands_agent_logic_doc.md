@@ -316,6 +316,150 @@ Planner Memory (conversationId, parentInteractionId)
     └── Executor Memory (executorMemoryId, executorParentInteractionId)
 ```
 
+## API Parameters
+
+### Required Parameters
+```json
+[
+    {
+        "name": "question",
+        "required": true,
+        "description": "User input question/objective that the agent should accomplish"
+    }
+]
+```
+
+### Optional Parameters
+```json
+[
+    {
+        "name": "executor_agent_id",
+        "required": false,
+        "description": "ID of the ReAct agent used to execute individual steps"
+    },
+    {
+        "name": "memory_id",
+        "required": false,
+        "description": "Memory ID for conversation context. If provided, agent will use existing conversation history"
+    },
+    {
+        "name": "tenant_id",
+        "required": false,
+        "description": "Tenant identifier for multi-tenant environments"
+    },
+    {
+        "name": "system_prompt",
+        "required": false,
+        "description": "Custom system prompt for the planner agent. Default: PLANNER_RESPONSIBILITY + response format"
+    },
+    {
+        "name": "executor_system_prompt",
+        "required": false,
+        "description": "Custom system prompt for the executor agent. Default: EXECUTOR_RESPONSIBILITY"
+    },
+    {
+        "name": "planner_prompt",
+        "required": false,
+        "description": "Custom planner instruction prompt. Default: 'For the given objective, generate a step-by-step plan...'"
+    },
+    {
+        "name": "reflect_prompt",
+        "required": false,
+        "description": "Custom reflection prompt. Default: 'Update your plan based on the latest step results...'"
+    },
+    {
+        "name": "planner_prompt_template",
+        "required": false,
+        "description": "Custom template for planner prompts with parameter substitution"
+    },
+    {
+        "name": "reflect_prompt_template",
+        "required": false,
+        "description": "Custom template for reflection prompts with parameter substitution"
+    },
+    {
+        "name": "planner_with_history_template",
+        "required": false,
+        "description": "Custom template for planner prompts when chat history exists"
+    },
+    {
+        "name": "max_steps",
+        "required": false,
+        "description": "Maximum number of steps to execute before terminating. Default: 20"
+    },
+    {
+        "name": "executor_max_iterations",
+        "required": false,
+        "description": "Maximum ReAct iterations for each step execution. Default: 20"
+    },
+    {
+        "name": "message_history_limit",
+        "required": false,
+        "description": "Number of previous messages to include as context during planning. Default: 10"
+    },
+    {
+        "name": "executor_message_history_limit",
+        "required": false,
+        "description": "Number of previous messages to include as context during step execution. Default: 10"
+    },
+    {
+        "name": "inject_datetime",
+        "required": false,
+        "description": "Whether to inject current datetime into system prompts. Default: false"
+    },
+    {
+        "name": "datetime_format",
+        "required": false,
+        "description": "Format string for datetime injection when inject_datetime is true"
+    },
+    {
+        "name": "llm_interface",
+        "required": false,
+        "description": "LLM interface type (bedrock_converse_claude, openai_v1_chat_completions, etc.) for auto-setting response filter"
+    },
+    {
+        "name": "llm_response_filter",
+        "required": false,
+        "description": "JSONPath expression to extract response from LLM output. Auto-set based on llm_interface if not provided"
+    }
+]
+```
+
+## Executor API Parameters
+
+When the planner calls the executor (ReAct agent), the following parameters are passed:
+
+### Required Parameters
+- **`question`**: The step to execute (extracted from planner's steps array)
+- **`system_prompt`**: Executor system prompt (default: `EXECUTOR_RESPONSIBILITY`)
+- **`llm_response_filter`**: JSON path for extracting LLM response
+- **`max_iteration`**: Maximum ReAct iterations (default: "20")
+- **`message_history_limit`**: Executor memory history limit (default: "10")
+
+### Optional Parameters
+- **`memory_id`**: Executor agent memory ID (if exists from previous steps)
+
+### Parameter Mapping
+```java
+// Core execution parameters
+reactParams.put("question", stepToExecute);
+reactParams.put("system_prompt", allParams.getOrDefault("executor_system_prompt", DEFAULT_EXECUTOR_SYSTEM_PROMPT));
+reactParams.put("llm_response_filter", allParams.get("llm_response_filter"));
+reactParams.put("max_iteration", allParams.getOrDefault("executor_max_iterations", "20"));
+reactParams.put("message_history_limit", allParams.getOrDefault("executor_message_history_limit", "10"));
+
+// Optional memory parameter
+if (allParams.containsKey("executor_agent_memory_id")) {
+    reactParams.put("memory_id", allParams.get("executor_agent_memory_id"));
+}
+```
+
+### Configuration Fields
+- **`executor_agent_id`**: ID of the ReAct agent to execute steps
+- **`executor_system_prompt`**: Custom system prompt for executor (optional)
+- **`executor_max_iterations`**: Max iterations for ReAct pattern (default: "20")
+- **`executor_message_history_limit`**: Memory context limit (default: "10")
+
 ## Integration Points for Strands Agent
 
 ### Required Components
@@ -325,7 +469,123 @@ Planner Memory (conversationId, parentInteractionId)
 4. **ReAct Executor**: Step-by-step execution agent
 5. **Prompt Management**: Template-based prompt generation
 
-### Configuration Parameters
+### Sequential Workflow Diagram
+
+```mermaid
+sequenceDiagram
+    participant Client
+    participant PlanExecuteReflectAgent as Plan-Execute-Reflect Agent
+    participant Memory as Conversation Memory
+    participant ToolFactory as Tool Factory
+    participant PlannerLLM as Planner LLM
+    participant ExecutorAgent as Executor (ReAct Agent)
+    participant ExecutorLLM as Executor LLM
+
+    Client->>PlanExecuteReflectAgent: run(mlAgent, apiParams, listener)
+
+    Note over PlanExecuteReflectAgent: Phase 1: Initialization
+    PlanExecuteReflectAgent->>PlanExecuteReflectAgent: setupPromptParameters()
+    PlanExecuteReflectAgent->>PlanExecuteReflectAgent: usePlannerPromptTemplate()
+
+    PlanExecuteReflectAgent->>Memory: create(userPrompt, memoryId, appType)
+    Memory-->>PlanExecuteReflectAgent: ConversationIndexMemory
+
+    PlanExecuteReflectAgent->>Memory: getMessages(messageHistoryLimit=10)
+    Memory-->>PlanExecuteReflectAgent: List<Interaction> (chat history)
+
+    alt Has Chat History
+        PlanExecuteReflectAgent->>PlanExecuteReflectAgent: addSteps(completedSteps)
+        PlanExecuteReflectAgent->>PlanExecuteReflectAgent: usePlannerWithHistoryPromptTemplate()
+    end
+
+    PlanExecuteReflectAgent->>ToolFactory: getMlToolSpecs() + getMcpToolSpecs()
+    ToolFactory-->>PlanExecuteReflectAgent: List<MLToolSpec>
+    PlanExecuteReflectAgent->>PlanExecuteReflectAgent: createTools() + addToolsToPrompt()
+
+    Note over PlanExecuteReflectAgent: Phase 2: Planning Loop (max 20 iterations)
+    loop Until Final Result or Max Steps (20)
+        PlanExecuteReflectAgent->>PlannerLLM: MLPredictionTaskRequest(prompt with tools)
+        PlannerLLM-->>PlanExecuteReflectAgent: ModelTensorOutput (JSON response)
+
+        PlanExecuteReflectAgent->>PlanExecuteReflectAgent: parseLLMOutput()
+
+        alt Final Result Found
+            PlanExecuteReflectAgent->>PlanExecuteReflectAgent: saveAndReturnFinalResult()
+            PlanExecuteReflectAgent->>Memory: updateInteraction(parentInteractionId, finalResult)
+            Memory-->>PlanExecuteReflectAgent: Success
+            PlanExecuteReflectAgent-->>Client: ModelTensorOutput (Final Result)
+        else Steps to Execute
+            Note over PlanExecuteReflectAgent: Phase 3: Step Execution
+            PlanExecuteReflectAgent->>PlanExecuteReflectAgent: Extract first step from steps array
+
+            Note over PlanExecuteReflectAgent: Prepare Executor Parameters
+            PlanExecuteReflectAgent->>PlanExecuteReflectAgent: Create reactParams:<br/>- question: stepToExecute<br/>- system_prompt: EXECUTOR_RESPONSIBILITY<br/>- llm_response_filter<br/>- max_iteration: 20<br/>- message_history_limit: 10<br/>- memory_id (if exists)
+
+            PlanExecuteReflectAgent->>ExecutorAgent: MLExecuteTaskRequest(AgentMLInput)
+
+            Note over ExecutorAgent: ReAct Pattern Execution
+            loop ReAct Iterations (max 20)
+                ExecutorAgent->>ExecutorLLM: Execute step with tools
+                ExecutorLLM-->>ExecutorAgent: Tool actions or final answer
+                ExecutorAgent->>ExecutorAgent: Process tool results
+            end
+
+            ExecutorAgent-->>PlanExecuteReflectAgent: ModelTensorOutput:<br/>- memory_id<br/>- parent_interaction_id<br/>- response (step result)
+
+            Note over PlanExecuteReflectAgent: Phase 4: Reflection
+            PlanExecuteReflectAgent->>PlanExecuteReflectAgent: Extract step result
+            PlanExecuteReflectAgent->>PlanExecuteReflectAgent: Update executor memory IDs
+            PlanExecuteReflectAgent->>PlanExecuteReflectAgent: Add step + result to completedSteps
+            PlanExecuteReflectAgent->>Memory: saveTraceData(step, result)
+            PlanExecuteReflectAgent->>PlanExecuteReflectAgent: addSteps(completedSteps)
+            PlanExecuteReflectAgent->>PlanExecuteReflectAgent: useReflectPromptTemplate()
+
+            Note over PlanExecuteReflectAgent: Continue Planning Loop
+        end
+    end
+
+    alt Max Steps Reached
+        PlanExecuteReflectAgent->>PlanExecuteReflectAgent: Create "Max Steps Limit Reached" message
+        PlanExecuteReflectAgent->>PlanExecuteReflectAgent: saveAndReturnFinalResult()
+        PlanExecuteReflectAgent-->>Client: ModelTensorOutput (Max Steps Message)
+    end
+```
+
+## Workflow Phases Breakdown
+
+### Phase 1: Initialization
+1. Setup prompt parameters and templates
+2. Initialize conversation memory
+3. Retrieve chat history (last 10 messages)
+4. Load and create tools (ML + MCP tools)
+5. Add tools description to prompt
+
+### Phase 2: Planning Loop
+1. Call Planner LLM with current context
+2. Parse JSON response for steps or final result
+3. If final result → save and return
+4. If steps → execute first step
+
+### Phase 3: Step Execution
+1. Extract first step from plan
+2. Prepare executor parameters
+3. Call ReAct Executor Agent
+4. Executor runs ReAct pattern (up to 20 iterations)
+5. Return step execution result
+
+### Phase 4: Reflection
+1. Process executor response
+2. Update memory tracking
+3. Add completed step to history
+4. Switch to reflection prompt template
+5. Continue planning loop
+
+### Termination Conditions
+- **Final Result**: Planner returns result field
+- **Max Steps**: 20 steps executed (configurable)
+- **Error**: Any component failure
+
+## Configuration Parameters
 - Max execution steps and iterations
 - Memory history limits
 - Prompt templates

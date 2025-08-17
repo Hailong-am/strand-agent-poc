@@ -1953,6 +1953,7 @@ source = { editable = "." }
 dependencies = [
     { name = "fastapi" },
     { name = "opensearch-mcp-server-py" },
+    { name = "opensearch-py" },
     { name = "python-dotenv" },
     { name = "strands-agents", extra = ["otel"] },
     { name = "strands-agents-tools" },
@@ -1977,6 +1978,7 @@ requires-dist = [
     { name = "fastapi", specifier = ">=0.104.0" },
     { name = "flake8", marker = "extra == 'dev'" },
     { name = "opensearch-mcp-server-py", specifier = ">=0.3.2" },
+    { name = "opensearch-py", specifier = ">=3.0.0" },
     { name = "pytest", marker = "extra == 'dev'" },
     { name = "python-dotenv", specifier = ">=1.0.0" },
     { name = "strands-agents", extras = ["otel"], specifier = ">=1.0.0" },

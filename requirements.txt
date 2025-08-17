@@ -4,3 +4,4 @@ strands-agents-mcp==0.2.3
 uvx==0.2.3
 uvx-stdio==0.2.3
 uvx-bedrock37==0.2.3
+opensearch-py

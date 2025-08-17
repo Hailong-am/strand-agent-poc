@@ -272,4 +272,4 @@ def run_agent(
         executor_max_iterations=executor_max_iterations,
     )
     # Main entry point for the Plan-Execute-Reflect agent
-    return plan_execute_reflect_agent.execute(objective, memory_id)
+    return plan_execute_reflect_agent.execute(objective)

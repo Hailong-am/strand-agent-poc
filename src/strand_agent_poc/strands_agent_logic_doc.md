@@ -401,26 +401,6 @@ Planner Memory (conversationId, parentInteractionId)
         "name": "executor_message_history_limit",
         "required": false,
         "description": "Number of previous messages to include as context during step execution. Default: 10"
-    },
-    {
-        "name": "inject_datetime",
-        "required": false,
-        "description": "Whether to inject current datetime into system prompts. Default: false"
-    },
-    {
-        "name": "datetime_format",
-        "required": false,
-        "description": "Format string for datetime injection when inject_datetime is true"
-    },
-    {
-        "name": "llm_interface",
-        "required": false,
-        "description": "LLM interface type (bedrock_converse_claude, openai_v1_chat_completions, etc.) for auto-setting response filter"
-    },
-    {
-        "name": "llm_response_filter",
-        "required": false,
-        "description": "JSONPath expression to extract response from LLM output. Auto-set based on llm_interface if not provided"
     }
 ]
 ```

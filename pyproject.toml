@@ -14,6 +14,7 @@ dependencies = [
     "uvicorn>=0.24.0",
     "python-dotenv>=1.0.0",
     "opensearch-mcp-server-py>=0.3.2",
+    "opensearch-py>=3.0.0",
 ]
 
 [project.optional-dependencies]

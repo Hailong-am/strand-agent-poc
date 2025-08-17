@@ -5,11 +5,8 @@ from . import model
 class Planner:
     def __init__(self):
         self.system_prompt = self._get_planner_system_prompt()
-        self.agent = Agent(
-            model=model.claude4Model,
-            system_prompt=self.system_prompt
-        )
-    
+        self.agent = Agent(model=model.claude4Model, system_prompt=self.system_prompt)
+
     def _get_planner_system_prompt(self) -> str:
         return """You are a thoughtful and analytical planner agent in a plan-execute-reflect framework. Your job is to design a clear, step-by-step plan for a given objective.
 
@@ -41,7 +38,7 @@ When you deliver your final result, include a comprehensive report. This report 
 4. Clearly explain how the steps led to your final conclusion. Only mention the completed steps.
 5. Return the full analysis and conclusion in the 'result' field, even if some of this was mentioned earlier.
 6. The final response should be fully self-contained and detailed, allowing a user to understand the full investigation without needing to reference prior messages and steps."""
-    
+
     def plan(self, objective: str, completed_steps: list = None) -> dict:
         """Generate a plan for the given objective"""
         if completed_steps:
@@ -59,5 +56,5 @@ Remember: Respond only in JSON format following the required schema."""
 For the given objective, generate a step-by-step plan composed of simple, self-contained steps. The final step should directly yield the final answer. Avoid unnecessary steps.
 
 Remember: Respond only in JSON format following the required schema."""
-        
+
         return str(self.agent(prompt))

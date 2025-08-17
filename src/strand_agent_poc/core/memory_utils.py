@@ -11,17 +11,17 @@ def query_agent_core_memory(
     session_id: str,
     action: str = "list",
     content: Optional[str] = None,
-    query: Optional[str] = None
+    query: Optional[str] = None,
 ) -> Dict[str, Any]:
     """
     查询agent core memory中的数据
-    
+
     Args:
         session_id: 会话ID
         action: 操作类型 ("list", "record", "search", "delete")
         content: 要记录的内容 (当action为"record"时使用)
         query: 搜索查询 (当action为"search"时使用)
-    
+
     Returns:
         Dict containing the result from agent core memory
     """
@@ -29,32 +29,32 @@ def query_agent_core_memory(
         memory_id=MEMORY_ID,
         actor_id=ACTOR_ID,
         session_id=session_id,
-        namespace=NAMESPACE
+        namespace=NAMESPACE,
     )
-    
+
     agent_core_memory = provider.agent_core_memory
-    
+
     kwargs = {"action": action}
     if content:
         kwargs["content"] = content
     if query:
         kwargs["query"] = query
-    
+
     return agent_core_memory(**kwargs)
 
 
 def get_conversation_history(session_id: str) -> List[Dict[str, Any]]:
     """
     获取指定会话的历史记录
-    
+
     Args:
         session_id: 会话ID
-    
+
     Returns:
         List of conversation steps
     """
     result = query_agent_core_memory(session_id, action="list")
-    
+
     if result.get("status") == "success" and result.get("content"):
         steps = []
         for item in result["content"]:
@@ -70,11 +70,11 @@ def get_conversation_history(session_id: str) -> List[Dict[str, Any]]:
 def save_to_memory(session_id: str, data: Dict[str, Any]) -> Dict[str, Any]:
     """
     保存数据到agent core memory
-    
+
     Args:
         session_id: 会话ID
         data: 要保存的数据
-    
+
     Returns:
         Result from the save operation
     """
@@ -85,16 +85,16 @@ def save_to_memory(session_id: str, data: Dict[str, Any]) -> Dict[str, Any]:
 def search_memory(session_id: str, query: str) -> List[Dict[str, Any]]:
     """
     在agent core memory中搜索数据
-    
+
     Args:
         session_id: 会话ID
         query: 搜索查询
-    
+
     Returns:
         List of matching results
     """
     result = query_agent_core_memory(session_id, action="search", query=query)
-    
+
     if result.get("status") == "success" and result.get("content"):
         matches = []
         for item in result["content"]:

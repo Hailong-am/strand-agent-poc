@@ -8,13 +8,13 @@ def main():
     objective = """
         Users are reporting payment failures during checkout process. Investigate the root cause of the payment failures and determine if there’s a pattern to the failures
     """
-    
+
     print("Starting Plan-Execute-Reflect Agent...")
     print(f"Objective: {objective}")
     print("-" * 50)
-    
+
     result = run_agent(objective, "111")
-    
+
     print("Final Result:")
     print(result)
 

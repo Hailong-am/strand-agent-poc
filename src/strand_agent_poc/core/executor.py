@@ -7,10 +7,14 @@ from dotenv import load_dotenv
 from strands.agent.conversation_manager import SummarizingConversationManager
 from . import model
 from strands.hooks import HookProvider, HookRegistry
-from strands.experimental.hooks import BeforeToolInvocationEvent, AfterToolInvocationEvent
+from strands.experimental.hooks import (
+    BeforeToolInvocationEvent,
+    AfterToolInvocationEvent,
+)
 
 # Load environment variables
 load_dotenv()
+
 
 class LoggingHook(HookProvider):
     def register_hooks(self, registry: HookRegistry, **kwargs) -> None:
@@ -18,29 +22,39 @@ class LoggingHook(HookProvider):
         # registry.add_callback(AfterToolInvocationEvent, self.log_end)
 
     def log_start(self, event: BeforeToolInvocationEvent) -> None:
-        input = event.tool_use['input']
-        input_json = json.dumps(json.loads(input), indent=2) if isinstance(input, str) else input
-        print(f"Request started for agent: {event.tool_use['name']} with input: {input_json}")
+        input = event.tool_use["input"]
+        input_json = (
+            json.dumps(json.loads(input), indent=2) if isinstance(input, str) else input
+        )
+        print(
+            f"Request started for agent: {event.tool_use['name']} with input: {input_json}"
+        )
 
     # def log_end(self, event: AfterToolInvocationEvent) -> None:
-        # print(f"Request completed for agent: {event.result}")
-
+    # print(f"Request completed for agent: {event.result}")
 
 
 # Connect to an MCP server using stdio transport
 # Note: uvx command syntax differs by platform
-stdio_mcp_client = MCPClient(lambda: stdio_client(
-    StdioServerParameters(
-        command="uvx",
-        args=["opensearch-mcp-server-py"],
-        env={k: v for k, v in {
-            "OPENSEARCH_URL": os.getenv("OPENSEARCH_URL"),
-            "OPENSEARCH_USERNAME": os.getenv("OPENSEARCH_USERNAME"),
-            "OPENSEARCH_PASSWORD": os.getenv("OPENSEARCH_PASSWORD"),
-            "OPENSEARCH_SSL_VERIFY": os.getenv("OPENSEARCH_SSL_VERIFY")
-        }.items() if v is not None},
+stdio_mcp_client = MCPClient(
+    lambda: stdio_client(
+        StdioServerParameters(
+            command="uvx",
+            args=["opensearch-mcp-server-py"],
+            env={
+                k: v
+                for k, v in {
+                    "OPENSEARCH_URL": os.getenv("OPENSEARCH_URL"),
+                    "OPENSEARCH_USERNAME": os.getenv("OPENSEARCH_USERNAME"),
+                    "OPENSEARCH_PASSWORD": os.getenv("OPENSEARCH_PASSWORD"),
+                    "OPENSEARCH_SSL_VERIFY": os.getenv("OPENSEARCH_SSL_VERIFY"),
+                }.items()
+                if v is not None
+            },
+        )
     )
-))
+)
+
 
 def get_executor_prompt() -> str:
     """Get the executor system prompt"""
@@ -56,6 +70,7 @@ Instructions:
 - Your response must be self-contained and ready for the planner to use without modification. Never end with a question.
 - Break complex searches into simpler queries when appropriate."""
 
+
 # @tool
 # def index_insight_tool():
 #     pass
@@ -64,12 +79,18 @@ Instructions:
 def get_tool_prompt() -> str:
     with stdio_mcp_client:
         tools = stdio_mcp_client.list_tools_sync()
-        tool_descriptions = "\n".join([f"Tool {i+1} - {tool.tool_name}: {tool.tool_spec}" for i, tool in enumerate(tools)])
+        tool_descriptions = "\n".join(
+            [
+                f"Tool {i+1} - {tool.tool_name}: {tool.tool_spec}"
+                for i, tool in enumerate(tools)
+            ]
+        )
         return f"""Available Tools:
 In this environment, you have access to the tools listed below. Use these tools to execute the given instruction, and do not reference or use any tools not listed here.
 {tool_descriptions}
 No other tools are available. Do not invent tools. Only use tools to execute the instruction.
         """
+
 
 def executor_agent(task: str) -> str:
     try:
@@ -83,16 +104,16 @@ def executor_agent(task: str) -> str:
 
             executor_agent = Agent(
                 model=model.bedrock37Model,
-                agent_id= "executor_agent",
+                agent_id="executor_agent",
                 name="Executor Agent",
                 description="Executor agent for executing planner steps",
                 system_prompt=get_executor_prompt(),
                 hooks=[LoggingHook()],
                 conversation_manager=SummarizingConversationManager(
                     summary_ratio=0.3,
-                    preserve_recent_messages = 10,
+                    preserve_recent_messages=10,
                 ),
-                tools=tools, # tools to query opensearch data and indexes
+                tools=tools,  # tools to query opensearch data and indexes
             )
 
             # Add observability by wrapping the agent call

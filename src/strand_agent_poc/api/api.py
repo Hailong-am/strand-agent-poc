@@ -40,14 +40,10 @@ async def execute_agent(request: AgentRequest):
             memory_id=request.memory_id,
             max_steps=request.max_steps,
             executor_max_iterations=request.executor_max_iterations,
-            message_history_limit=request.message_history_limit,
-            executor_message_history_limit=request.executor_message_history_limit,
             system_prompt=request.system_prompt,
             executor_system_prompt=request.executor_system_prompt,
             planner_prompt=request.planner_prompt,
             reflect_prompt=request.reflect_prompt,
-            inject_datetime=request.inject_datetime,
-            datetime_format=request.datetime_format
         )
         return AgentResponse(result=result, success=True)
     except Exception as e:
@@ -63,6 +59,7 @@ async def health_check():
 def main():
     """Entry point for the API server"""
     import uvicorn
+
     uvicorn.run(app, host="0.0.0.0", port=8000)
 
 

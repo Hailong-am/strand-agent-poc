@@ -1,4 +1,3 @@
-
 import os
 import boto3
 from strands.models import BedrockModel
@@ -13,12 +12,10 @@ session = boto3.Session(
 
 # Claude 3.7 Sonnet model for executor
 bedrock37Model = BedrockModel(
-    model_id="us.anthropic.claude-3-7-sonnet-20250219-v1:0",
-    boto_session=session
+    model_id="us.anthropic.claude-3-7-sonnet-20250219-v1:0", boto_session=session
 )
 
 # Claude 4 Sonnet model for planner
 claude4Model = BedrockModel(
-    model_id="anthropic.claude-sonnet-4-20250514-v1:0",
-    boto_session=session
+    model_id="anthropic.claude-sonnet-4-20250514-v1:0", boto_session=session
 )

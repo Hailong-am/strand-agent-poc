@@ -63,4 +63,6 @@ For the given objective, generate a step-by-step plan composed of simple, self-c
 """
 
 
-DEFAULT_REFLECT_PROMPT: str = """Update your plan based on the latest step results. If the task is complete, return the final answer. Otherwise, include only the remaining steps. Do not repeat previously completed steps."""
+DEFAULT_REFLECT_PROMPT: str = (
+    """Update your plan based on the latest step results. If the task is complete, return the final answer. Otherwise, include only the remaining steps. Do not repeat previously completed steps."""
+)

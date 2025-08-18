@@ -1,4 +1,5 @@
 import json
+from typing import Mapping, Optional
 from mcp import stdio_client, StdioServerParameters
 from strands import Agent, tool
 from strands_tools import current_time
@@ -12,6 +13,7 @@ from strands.experimental.hooks import (
     BeforeToolInvocationEvent,
     AfterToolInvocationEvent,
 )
+from strands.types.traces import AttributeValue
 
 # Load environment variables
 load_dotenv()
@@ -123,10 +125,10 @@ def get_tool_prompt() -> str:
                 for i, tool in enumerate(tools)
             ]
         )
-        
+
         # Add index_insight tool description
         index_insight_desc = f"Tool {len(tools)+1} - index_insight_tool: Get ML insights for a given OpenSearch index. Parameters: index (str), insight_type (STATISTICAL_DATA|FIELD_DESCRIPTION|LOG_RELATED_INDEX_CHECK, default: LOG_RELATED_INDEX_CHECK)"
-        
+
         return f"""Available Tools:
 In this environment, you have access to the tools listed below. Use these tools to execute the given instruction, and do not reference or use any tools not listed here.
 {tool_descriptions}
@@ -135,7 +137,7 @@ No other tools are available. Do not invent tools. Only use tools to execute the
         """
 
 
-def executor_agent(task: str) -> str:
+def executor_agent(task: str, trace_id: Optional[str] = None) -> str:
     try:
         # Create an agent with MCP tools
         with stdio_mcp_client:
@@ -156,6 +158,7 @@ def executor_agent(task: str) -> str:
                     summary_ratio=0.3,
                     preserve_recent_messages=10,
                 ),
+                trace_attributes={"trace_id": trace_id} if trace_id else None,
                 tools=[*tools, index_insight],  # tools to query opensearch data and indexes
             )
 

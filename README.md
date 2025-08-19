@@ -107,6 +107,53 @@ black src/
 flake8 src/
 ```
 
+## Deployment (AgentCore)
+
+1. Configure environment variables
+
+Create a .env file in the project root and fill in your credentials:
+
+```
+# AWS settings
+AWS_BEARER_TOKEN_BEDROCK=
+AWS_DEFAULT_REGION=us-west-2
+
+# OpenSearch settings
+OPENSEARCH_URL=
+OPENSEARCH_USERNAME=
+OPENSEARCH_PASSWORD=
+OPENSEARCH_SSL_VERIFY=
+
+MEMORY_ID=
+ACTOR_ID=
+NAMESPACE=
+REGION=
+```
+
+2. Local testing
+
+```
+python agent.py
+```
+
+3. Deploy with AgentCore
+
+Ensure Docker is running before proceeding:
+
+```
+# Configure your agent
+# will generate Docker file
+agentcore configure --entrypoint agent_example.py -er <YOUR_IAM_ROLE_ARN>
+
+# Local testing
+agentcore launch -l
+
+# Deploy to AWS
+agentcore launch
+
+# Test your agent with CLI
+agentcore invoke '{"prompt": "Hello"}'
+```
 ## License
 
 MIT

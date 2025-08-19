@@ -49,7 +49,7 @@ class PlanExecuteReflectAgent:
         self.planner_system_prompt = self._get_planner_system_prompt()
 
         # Create a new AgentCoreMemoryToolProvider for each session
-        memory_tool = self._get_agent_core_memory(session_id)
+        # memory_tool = self._get_agent_core_memory(session_id)
 
         # Initialize session manager with conversationId
         session_manager = FileSessionManager(
@@ -61,7 +61,7 @@ class PlanExecuteReflectAgent:
         self.planner = Agent(
             model=model.bedrock37Model,
             system_prompt=self.planner_system_prompt,
-            tools=[current_time, memory_tool],
+            tools=[current_time],
             conversation_manager=SummarizingConversationManager(
                 preserve_recent_messages=10,
             ),

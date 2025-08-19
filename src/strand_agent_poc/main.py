@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 
 import sys
-from .core.plan_execute_reflect_agent import run_agent, _load_conversation_history
+from strand_agent_poc.core.plan_execute_reflect_agent import run_agent
 from strands_tools.agent_core_memory import AgentCoreMemoryToolProvider
 
 

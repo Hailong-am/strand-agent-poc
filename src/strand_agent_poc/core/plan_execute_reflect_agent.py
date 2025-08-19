@@ -8,6 +8,9 @@ from strands.session.file_session_manager import FileSessionManager
 from strands_tools import current_time
 from strands_tools.agent_core_memory import AgentCoreMemoryToolProvider
 from strands.agent.conversation_manager import SummarizingConversationManager
+from strands.telemetry import StrandsTelemetry
+from strands.telemetry.tracer import get_tracer
+from opentelemetry import trace as trace_api
 
 from .prompt_management.prompts import (
     DEFAULT_PLANNER_PROMPT,
@@ -25,11 +28,17 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-MEMORY_ID = os.getenv("MEMORY_ID")
-ACTOR_ID = os.getenv("ACTOR_ID")
+MEMORY_ID = os.getenv("MEMORY_ID","memory_ux56y-yA1dMNGN1i")
+ACTOR_ID = os.getenv("ACTOR_ID", "plan_execute_reflect_agent")
 NAMESPACE = os.getenv("NAMESPACE", "default")
 REGION = os.getenv("REGION", "us-east-1")
 
+
+# Enable tracing for the agent
+strands_telemetry = StrandsTelemetry()
+strands_telemetry.setup_otlp_exporter()     # Send traces to OTLP endpoint
+strands_telemetry.setup_meter(
+    enable_otlp_exporter=True)
 
 class PlanExecuteReflectAgent:
     def __init__(
@@ -135,7 +144,7 @@ class PlanExecuteReflectAgent:
         except json.JSONDecodeError as e:
             return {"steps": [], "result": f"Error parsing response: {str(e)}"}
 
-    def _get_agent_core_memory(self, session_id: str):
+    def _get_agent_core_memory_provider(self, session_id: str) -> AgentCoreMemoryToolProvider:
         # Create a new AgentCoreMemoryToolProvider for each session
         provider = AgentCoreMemoryToolProvider(
             boto_session=model.session,
@@ -145,14 +154,14 @@ class PlanExecuteReflectAgent:
             namespace=NAMESPACE,
             region=REGION,
         )
-        return provider.agent_core_memory
+        return provider
 
     def _load_conversation_history(self, conversationId: str) -> list:
         # Use agent_core_memory with current session_id (conversationId)
-        memory = self._get_agent_core_memory(conversationId)
-        result = memory(
+        provider = self._get_agent_core_memory_provider(conversationId)
+        result = provider.agent_core_memory(
             action="list",
-        )
+        ) # type: ignore
         print("&&&&&")
         print(result)
         # result["content"] 是一个列表，每个元素是 {"text": ...}
@@ -169,14 +178,17 @@ class PlanExecuteReflectAgent:
 
     def _save_interaction(self, conversationId: str, interaction: dict):
         # Use agent_core_memory with current session_id (conversationId)
-        agent_core_memory = self._get_agent_core_memory(conversationId)
-        agent_core_memory(
+        provider = self._get_agent_core_memory_provider(conversationId)
+        provider.agent_core_memory(
             action="record", content=json.dumps(interaction, ensure_ascii=False)
-        )
+        ) # type: ignore
 
-    def execute(self, objective: str) -> str:
+    def execute(self, objective: str, trace_id: Optional[str] = None) -> str:
         # self.completed_steps = self._load_conversation_history(conversationId)
         # interactionId = 0  # Initialize interactionId
+        # tracer = get_tracer()
+        # self.planner.tracer = tracer
+
 
         # Main execution loop for Plan-Execute-Reflect agent
         while len(self.completed_steps) < self.max_steps:
@@ -217,7 +229,7 @@ class PlanExecuteReflectAgent:
             self.plan_steps = steps
 
             # Check if we have a final result
-            if parsed_response.get("result") and len(steps) == 0:
+            if parsed_response.get("result"):
                 # # Save final result
                 # self._save_interaction(conversationId, {
                 #     "conversationId": conversationId,
@@ -243,8 +255,10 @@ class PlanExecuteReflectAgent:
                 # All steps have been executed
                 return f"All planned steps executed. Completed steps: {json.dumps(self.completed_steps, indent=2)}"
 
-            # Execute the step
+            span = self.planner.tracer._start_span(span_name=next_step, parent_span=self.planner.trace_span)
             step_result = executor_agent(next_step)
+            self.planner.tracer._end_span(span)
+
             interaction = {"input": next_step, "result": step_result}
             self.completed_steps.append(interaction)
             # self._save_interaction(conversationId, interaction)
